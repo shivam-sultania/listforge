@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ListForge
 
-## Getting Started
+Build lists with columns you define yourself — text, numbers, dates or dropdowns —
+and ListForge renders the table around them.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router, Server Components, Server Actions)
+- TypeScript
+- Prisma 6 + PostgreSQL
+- Tailwind CSS v4
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set `DATABASE_URL` in `.env` to a PostgreSQL connection string, then:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm prisma migrate dev    # creates tables and seeds demo data
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open http://localhost:3000.
 
-## Learn More
+## Data model
 
-To learn more about Next.js, take a look at the following resources:
+`User` → `List` → `Row`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+A list's column definitions live in `List.columns` as a JSON string, and each
+row's cell values live in `Row.data` as a JSON string keyed by **column id**
+(not name, so columns can be renamed without orphaning data).
+See `lib/columns.ts` for the shared types and parsers.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Auth
 
-## Deploy on Vercel
+Not implemented yet. `lib/auth.ts` returns the seeded demo user; swapping that
+one function for a real session lookup is the only change the rest of the app
+needs.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Purpose |
+| --- | --- |
+| `pnpm dev` | Dev server |
+| `pnpm build` | Production build |
+| `pnpm lint` | ESLint |
+| `pnpm prisma studio` | Browse the database |
+| `pnpm prisma db seed` | Re-run the seed |
