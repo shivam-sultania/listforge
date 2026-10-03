@@ -42,15 +42,15 @@ body {
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
+    text-sm font-medium transition-colors disabled:cursor-not-allowed
+    disabled:opacity-60;
+}
+
 @layer components {
   .card {
     @apply rounded-xl border border-line bg-surface;
-  }
-
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
-      text-sm font-medium transition-colors disabled:cursor-not-allowed
-      disabled:opacity-60;
   }
 
   .btn-primary {
