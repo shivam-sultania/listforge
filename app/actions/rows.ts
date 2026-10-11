@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
-import { buildRowData, parseColumns } from "@/lib/columns";
+import { buildRowData, parseColumns, parseRowData } from "@/lib/columns";
 
 /** Loads a list only if the current user owns it. */
 async function getOwnedList(listId: string) {
@@ -49,6 +49,33 @@ export async function updateRow(formData: FormData) {
 
   await prisma.row.updateMany({
     where: { id: rowId, listId },
+    data: { data: JSON.stringify(data) },
+  });
+
+  revalidatePath(`/lists/${listId}`);
+}
+
+/** Saves one cell, leaving the row's other values untouched. */
+export async function updateCell(
+  listId: string,
+  rowId: string,
+  columnId: string,
+  value: string,
+) {
+  const list = await getOwnedList(listId);
+  if (!list) return;
+
+  const columns = parseColumns(list.columns);
+  if (!columns.some((c) => c.id === columnId)) return;
+
+  const row = await prisma.row.findFirst({ where: { id: rowId, listId } });
+  if (!row) return;
+
+  const data = parseRowData(row.data);
+  data[columnId] = value.trim();
+
+  await prisma.row.update({
+    where: { id: rowId },
     data: { data: JSON.stringify(data) },
   });
 

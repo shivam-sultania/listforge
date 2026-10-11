@@ -21,11 +21,8 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3 text-sm">
-          <Link href="/login" className="text-muted hover:text-foreground">
+          <Link href="/login" className="btn-primary px-3 py-1.5">
             Login
-          </Link>
-          <Link href="/signup" className="btn-primary px-3 py-1.5">
-            Sign up
           </Link>
         </div>
       </nav>

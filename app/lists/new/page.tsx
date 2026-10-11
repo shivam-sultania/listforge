@@ -5,7 +5,7 @@ import NewListForm from "@/app/components/NewListForm";
 
 export const metadata: Metadata = {
   title: "New list · ListForge",
-  description: "Define your columns and create a list.",
+  description: "Name your list and start adding columns.",
 };
 
 export default function NewListPage() {
@@ -19,7 +19,7 @@ export default function NewListPage() {
         Create a list
       </h1>
       <p className="mt-1 text-sm text-muted">
-        Columns are fixed once the list is created, so sketch them out now.
+        Give it a name — you&apos;ll add columns on the list page.
       </p>
 
       <div className="mt-8">

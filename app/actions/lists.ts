@@ -6,44 +6,32 @@ import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
-import { isColumnType, type Column } from "@/lib/columns";
+import { isColumnType, parseColumns, type Column } from "@/lib/columns";
 
 export type ActionState = { error?: string };
 
-function parseColumnPayload(raw: FormDataEntryValue | null): Column[] {
+/** Loads a list only if the current user owns it. */
+async function getOwnedList(listId: string) {
+  const userId = await requireUserId();
+  return prisma.list.findFirst({ where: { id: listId, userId } });
+}
+
+function parseOptions(raw: FormDataEntryValue | null): string[] {
   if (typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+}
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.flatMap((entry): Column[] => {
-    if (!entry || typeof entry !== "object") return [];
-    const candidate = entry as Record<string, unknown>;
-    const name = typeof candidate.name === "string" ? candidate.name.trim() : "";
-    const type = typeof candidate.type === "string" ? candidate.type : "";
-    if (!name || !isColumnType(type)) return [];
-
-    const options = Array.isArray(candidate.options)
-      ? candidate.options
-          .filter((o): o is string => typeof o === "string")
-          .map((o) => o.trim())
-          .filter(Boolean)
-      : undefined;
-
-    return [
-      {
-        id: typeof candidate.id === "string" && candidate.id ? candidate.id : randomUUID(),
-        name,
-        type,
-        ...(type === "select" && options?.length ? { options } : {}),
-      },
-    ];
+async function saveColumns(listId: string, columns: Column[]) {
+  await prisma.list.update({
+    where: { id: listId },
+    data: { columns: JSON.stringify(columns) },
   });
+
+  revalidatePath(`/lists/${listId}`);
+  revalidatePath("/dashboard");
 }
 
 export async function createList(
@@ -54,24 +42,14 @@ export async function createList(
 
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const columns = parseColumnPayload(formData.get("columns"));
 
   if (!name) return { error: "Give your list a name." };
-  if (columns.length === 0) return { error: "Add at least one column." };
-
-  const duplicate = columns.find(
-    (col, i) =>
-      columns.findIndex(
-        (other) => other.name.toLowerCase() === col.name.toLowerCase(),
-      ) !== i,
-  );
-  if (duplicate) return { error: `Duplicate column name: "${duplicate.name}".` };
 
   const list = await prisma.list.create({
     data: {
       name,
       description: description || null,
-      columns: JSON.stringify(columns),
+      columns: "[]",
       userId,
     },
   });
@@ -90,7 +68,11 @@ export async function deleteList(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function updateList(formData: FormData) {
+export async function 
+
+
+
+updateList(formData: FormData) {
   const userId = await requireUserId();
   const id = String(formData.get("listId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -105,4 +87,76 @@ export async function updateList(formData: FormData) {
 
   revalidatePath(`/lists/${id}`);
   revalidatePath("/dashboard");
+}
+
+export async function addColumn(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const listId = String(formData.get("listId") ?? "");
+  const list = await getOwnedList(listId);
+  if (!list) return { error: "List not found." };
+
+  const name = String(formData.get("name") ?? "").trim();
+  const type = String(formData.get("type") ?? "");
+  const options = parseOptions(formData.get("options"));
+
+  if (!name) return { error: "Give the column a name." };
+  if (!isColumnType(type)) return { error: "Pick a column type." };
+
+  const columns = parseColumns(list.columns);
+  if (columns.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+    return { error: `A column named "${name}" already exists.` };
+  }
+
+  columns.push({
+    id: randomUUID(),
+    name,
+    type,
+    ...(type === "select" && options.length ? { options } : {}),
+  });
+
+  await saveColumns(listId, columns);
+  return {};
+}
+
+export async function updateColumn(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const listId = String(formData.get("listId") ?? "");
+  const columnId = String(formData.get("columnId") ?? "");
+  const list = await getOwnedList(listId);
+  if (!list) return { error: "List not found." };
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Give the column a name." };
+
+  const columns = parseColumns(list.columns);
+  const column = columns.find((c) => c.id === columnId);
+  if (!column) return { error: "Column not found." };
+
+  const duplicate = columns.some(
+    (c) => c.id !== columnId && c.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (duplicate) return { error: `A column named "${name}" already exists.` };
+
+  column.name = name;
+  if (column.type === "select") {
+    const options = parseOptions(formData.get("options"));
+    column.options = options.length ? options : undefined;
+  }
+
+  await saveColumns(listId, columns);
+  return {};
+}
+
+export async function deleteColumn(formData: FormData) {
+  const listId = String(formData.get("listId") ?? "");
+  const columnId = String(formData.get("columnId") ?? "");
+  const list = await getOwnedList(listId);
+  if (!list) return;
+
+  const columns = parseColumns(list.columns).filter((c) => c.id !== columnId);
+  await saveColumns(listId, columns);
 }

@@ -24,6 +24,8 @@ export default function AddRowForm({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
+  if (columns.length === 0) return null;
+
   return (
     <form
       ref={formRef}
