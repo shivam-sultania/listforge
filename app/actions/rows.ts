@@ -3,56 +3,63 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireUserId } from "@/lib/auth";
-import { buildRowData, parseColumns, parseRowData } from "@/lib/columns";
+import { getOwnedList } from "@/lib/lists";
+import {
+  MAX_BULK_ROWS,
+  parseColumns,
+  parseFieldRows,
+  parseJsonRows,
+  parseRowData,
+  parseTextRows,
+  type ParsedRows,
+} from "@/lib/columns";
 
-/** Loads a list only if the current user owns it. */
-async function getOwnedList(listId: string) {
-  const userId = await requireUserId();
-  return prisma.list.findFirst({ where: { id: listId, userId } });
-}
+export type AddRowsState = { error?: string; added?: number };
 
-export async function createRow(formData: FormData) {
+/** Adds rows from any of the three add-row formats: "fields", "text" or "json". */
+export async function createRows(
+  _prev: AddRowsState,
+  formData: FormData,
+): Promise<AddRowsState> {
   const listId = String(formData.get("listId") ?? "");
   const list = await getOwnedList(listId);
-  if (!list) return;
+  if (!list) return { error: "List not found." };
 
   const columns = parseColumns(list.columns);
-  const data = buildRowData(columns, formData);
+  const format = formData.get("format");
+  const text = String(formData.get("text") ?? "");
+
+  const parsed: ParsedRows =
+    format === "json"
+      ? parseJsonRows(columns, text)
+      : format === "text"
+        ? parseTextRows(columns, text)
+        : parseFieldRows(columns, formData);
+
+  if (parsed.error) return { error: parsed.error };
+  const rows = parsed.rows;
+  if (rows.length === 0) return { error: "Fill in at least one row." };
+  if (rows.length > MAX_BULK_ROWS) {
+    return { error: `Add at most ${MAX_BULK_ROWS} rows at a time.` };
+  }
 
   const last = await prisma.row.findFirst({
     where: { listId },
     orderBy: { position: "desc" },
     select: { position: true },
   });
+  const start = (last?.position ?? -1) + 1;
 
-  await prisma.row.create({
-    data: {
+  await prisma.row.createMany({
+    data: rows.map((data, i) => ({
       listId,
+      position: start + i,
       data: JSON.stringify(data),
-      position: (last?.position ?? -1) + 1,
-    },
+    })),
   });
 
   revalidatePath(`/lists/${listId}`);
-}
-
-export async function updateRow(formData: FormData) {
-  const listId = String(formData.get("listId") ?? "");
-  const rowId = String(formData.get("rowId") ?? "");
-
-  const list = await getOwnedList(listId);
-  if (!list) return;
-
-  const columns = parseColumns(list.columns);
-  const data = buildRowData(columns, formData);
-
-  await prisma.row.updateMany({
-    where: { id: rowId, listId },
-    data: { data: JSON.stringify(data) },
-  });
-
-  revalidatePath(`/lists/${listId}`);
+  return { added: rows.length };
 }
 
 /** Saves one cell, leaving the row's other values untouched. */
@@ -82,10 +89,7 @@ export async function updateCell(
   revalidatePath(`/lists/${listId}`);
 }
 
-export async function deleteRow(formData: FormData) {
-  const listId = String(formData.get("listId") ?? "");
-  const rowId = String(formData.get("rowId") ?? "");
-
+export async function deleteRow(listId: string, rowId: string) {
   const list = await getOwnedList(listId);
   if (!list) return;
 

@@ -55,14 +55,65 @@ export function parseRowData(raw: string): RowData {
   }
 }
 
-/** Build the stored row payload, keeping only keys the list still defines. */
-export function buildRowData(columns: Column[], form: FormData): RowData {
-  const data: RowData = {};
-  for (const column of columns) {
-    const value = form.get(`col_${column.id}`);
-    data[column.id] = typeof value === "string" ? value.trim() : "";
+export const MAX_BULK_ROWS = 500;
+
+export type ParsedRows = { rows: RowData[]; error?: string };
+
+function isBlank(row: RowData) {
+  return Object.values(row).every((v) => !v);
+}
+
+/** Reads repeated `col_<id>` inputs: the nth value of each column forms row n. Blank rows are skipped. */
+export function parseFieldRows(columns: Column[], form: FormData): ParsedRows {
+  const values = columns.map((c) => form.getAll(`col_${c.id}`).map((v) => String(v).trim()));
+  const count = Math.max(0, ...values.map((v) => v.length));
+
+  const rows: RowData[] = [];
+  for (let i = 0; i < count; i++) {
+    rows.push(Object.fromEntries(columns.map((c, j) => [c.id, values[j][i] ?? ""])));
   }
-  return data;
+  return { rows: rows.filter((r) => !isBlank(r)) };
+}
+
+/** One row per line, cells separated by tabs (spreadsheet paste) or commas, in column order. */
+export function parseTextRows(columns: Column[], text: string): ParsedRows {
+  const rows = text
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => {
+      const cells = (line.includes("\t") ? line.split("\t") : line.split(",")).map((c) => c.trim());
+      return Object.fromEntries(columns.map((c, i) => [c.id, cells[i] ?? ""]));
+    });
+  return { rows: rows.filter((r) => !isBlank(r)) };
+}
+
+/** A JSON object or array of objects keyed by column name (case-insensitive); unknown keys are ignored. */
+export function parseJsonRows(columns: Column[], text: string): ParsedRows {
+  if (!text.trim()) return { rows: [] };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { rows: [], error: "That isn't valid JSON." };
+  }
+
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  const idByName = new Map(columns.map((c) => [c.name.toLowerCase(), c.id]));
+  const rows: RowData[] = [];
+
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return { rows: [], error: 'Each row must be an object, like {"Name": "…"}.' };
+    }
+    const row: RowData = Object.fromEntries(columns.map((c) => [c.id, ""]));
+    for (const [key, value] of Object.entries(item)) {
+      const id = idByName.get(key.trim().toLowerCase());
+      if (id && value != null) row[id] = String(value).trim();
+    }
+    rows.push(row);
+  }
+  return { rows: rows.filter((r) => !isBlank(r)) };
 }
 
 export function formatCell(column: Column, value: string): string {

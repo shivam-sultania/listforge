@@ -2,7 +2,7 @@
 
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
-import { deleteRow, updateCell, updateRow } from "@/app/actions/rows";
+import { deleteRow, updateCell } from "@/app/actions/rows";
 import ColumnMenu from "@/app/components/ColumnMenu";
 import {
   formatCell,
@@ -19,46 +19,6 @@ type Props = {
   columns: Column[];
   rows: SerializedRow[];
 };
-
-function CellInput({
-  column,
-  value,
-  formId,
-}: {
-  column: Column;
-  value: string;
-  formId: string;
-}) {
-  const name = `col_${column.id}`;
-
-  if (column.type === "select") {
-    return (
-      <select
-        form={formId}
-        name={name}
-        defaultValue={value}
-        className="field py-1.5"
-      >
-        <option value="">—</option>
-        {(column.options ?? []).map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <input
-      form={formId}
-      name={name}
-      type={inputTypeFor(column.type)}
-      defaultValue={value}
-      className="field py-1.5"
-    />
-  );
-}
 
 function Cell({ column, value }: { column: Column; value: string }) {
   if (!value) return <span className="text-muted">—</span>;
@@ -159,9 +119,26 @@ function EditableCell({
   );
 }
 
-export default function DataTable({ listId, columns, rows }: Props) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+function DeleteRowButton({ listId, rowId }: { listId: string; rowId: string }) {
+  const [pending, startTransition] = useTransition();
 
+  return (
+    <button
+      type="button"
+      className="btn-danger opacity-0 group-hover:opacity-100 focus:opacity-100"
+      disabled={pending}
+      aria-label="Delete row"
+      onClick={() => {
+        if (!confirm("Delete this row?")) return;
+        startTransition(() => deleteRow(listId, rowId));
+      }}
+    >
+      ✕
+    </button>
+  );
+}
+
+export default function DataTable({ listId, columns, rows }: Props) {
   const parsed: { id: string; values: RowData }[] = rows.map((row) => ({
     id: row.id,
     values: parseRowData(row.data),
@@ -213,51 +190,28 @@ export default function DataTable({ listId, columns, rows }: Props) {
             </tr>
           )}
 
-          {parsed.map((row) => {
-            const isEditing = editingId === row.id;
-
-            return (
-              <tr
-                key={row.id}
-                className="border-b border-line last:border-0 hover:bg-accent-soft/40"
-              >
-                {columns.map((column) => (
-                  <td key={column.id} className="px-4 py-1.5 align-middle">
-                    {isEditing ? (
-                      <CellInput
-                        column={column}
-                        value={row.values[column.id] ?? ""}
-                        formId={`edit-${row.id}`}
-                      />
-                    ) : (
-                      <EditableCell
-                        listId={listId}
-                        rowId={row.id}
-                        column={column}
-                        value={row.values[column.id] ?? ""}
-                      />
-                    )}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
+          {parsed.map((row) => (
+            <tr
+              key={row.id}
+              className="group border-b border-line last:border-0 hover:bg-accent-soft/40"
+            >
+              {columns.map((column) => (
+                <td key={column.id} className="px-4 py-1.5 align-middle">
+                  <EditableCell
+                    listId={listId}
+                    rowId={row.id}
+                    column={column}
+                    value={row.values[column.id] ?? ""}
+                  />
+                </td>
+              ))}
+              <td className="px-4 py-1.5 text-right">
+                <DeleteRowButton listId={listId} rowId={row.id} />
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
-
-      {/* Forms live outside the table; inputs above bind to them via form="" */}
-      {parsed.map((row) => (
-        <div key={row.id} className="hidden">
-          <form id={`edit-${row.id}`} action={updateRow}>
-            <input type="hidden" name="listId" value={listId} />
-            <input type="hidden" name="rowId" value={row.id} />
-          </form>
-          <form id={`delete-${row.id}`} action={deleteRow}>
-            <input type="hidden" name="listId" value={listId} />
-            <input type="hidden" name="rowId" value={row.id} />
-          </form>
-        </div>
-      ))}
     </div>
   );
 }

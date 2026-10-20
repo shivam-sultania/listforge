@@ -12,13 +12,32 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum Role {
+  USER
+  DEV
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   password  String
+  role      Role     @default(USER)
   createdAt DateTime @default(now())
 
-  lists List[]
+  lists    List[]
+  sessions Session[]
+}
+
+// One row per logged-in browser; id is a SHA-256 hash of the cookie token.
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model List {

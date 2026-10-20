@@ -5,9 +5,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
 import { parseColumns } from "@/lib/columns";
-import AddRowForm from "@/app/components/AddRowForm";
-import DataTable from "@/app/components/DataTable";
 import ListHeader from "@/app/components/ListHeader";
+import ListRows from "@/app/components/ListRows";
 
 async function getList(id: string) {
   const userId = await requireUserId();
@@ -59,14 +58,12 @@ export default async function ListDetailPage({
         />
       </div>
 
-      <div className="mt-8 space-y-6">
-        <DataTable
+      <div className="mt-6">
+        <ListRows
           listId={list.id}
           columns={columns}
           rows={list.rows.map((row) => ({ id: row.id, data: row.data }))}
         />
-
-        <AddRowForm listId={list.id} columns={columns} />
       </div>
     </main>
   );

@@ -1,24 +1,24 @@
-import { prisma } from "@/lib/prisma";
+import { cache } from "react";
+import { redirect } from "next/navigation";
 
-const DEMO_EMAIL = "demo@listforge.dev";
+import { getSessionUser } from "@/lib/session";
 
-/**
- * Temporary stand-in for real auth: always resolves the seeded demo user.
- * Swap this single function for a session lookup when auth lands.
- */
-export async function getCurrentUser() {
-  const user = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+/** The logged-in user or null; cached so one request hits the DB once. */
+export const getCurrentUser = cache(getSessionUser);
 
-  if (!user) {
-    throw new Error(
-      `No user found for ${DEMO_EMAIL}. Run "pnpm prisma db seed" first.`,
-    );
-  }
-
+export async function requireUser() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   return user;
 }
 
 export async function requireUserId() {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   return user.id;
+}
+
+export async function requireDev() {
+  const user = await requireUser();
+  if (user.role !== "DEV") redirect("/dashboard");
+  return user;
 }

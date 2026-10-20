@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 import { PrismaClient } from "../app/generated/prisma/client";
+import { hashPassword } from "../lib/password";
 
 const prisma = new PrismaClient();
 
@@ -49,11 +50,29 @@ async function seedList(
   });
 }
 
+async function seedDev() {
+  const email = (process.env.SEED_DEV_EMAIL ?? "dev@listforge.dev").toLowerCase();
+  const password = process.env.SEED_DEV_PASSWORD;
+  if (!password) {
+    throw new Error("Set SEED_DEV_PASSWORD in .env to create the dev account.");
+  }
+
+  await prisma.user.upsert({
+    where: { email },
+    update: { role: "DEV" },
+    create: { email, password: await hashPassword(password), role: "DEV" },
+  });
+  console.log(`Seeded dev ${email}`);
+}
+
 async function main() {
+  await seedDev();
+
+  const demoPassword = await hashPassword("demo1234");
   const user = await prisma.user.upsert({
     where: { email: "demo@listforge.dev" },
-    update: {},
-    create: { email: "demo@listforge.dev", password: "demo1234" },
+    update: { password: demoPassword },
+    create: { email: "demo@listforge.dev", password: demoPassword },
   });
 
   await seedList(

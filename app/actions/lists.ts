@@ -6,15 +6,10 @@ import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
+import { getOwnedList } from "@/lib/lists";
 import { isColumnType, parseColumns, type Column } from "@/lib/columns";
 
 export type ActionState = { error?: string };
-
-/** Loads a list only if the current user owns it. */
-async function getOwnedList(listId: string) {
-  const userId = await requireUserId();
-  return prisma.list.findFirst({ where: { id: listId, userId } });
-}
 
 function parseOptions(raw: FormDataEntryValue | null): string[] {
   if (typeof raw !== "string") return [];
@@ -68,11 +63,7 @@ export async function deleteList(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function 
-
-
-
-updateList(formData: FormData) {
+export async function updateList(formData: FormData) {
   const userId = await requireUserId();
   const id = String(formData.get("listId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
